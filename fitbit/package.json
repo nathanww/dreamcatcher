@@ -1,0 +1,30 @@
+{
+  "fitbit": {
+    "appUUID": "e44102df-ac6b-4cc9-a2e0-d1843dbf8c26",
+    "appType": "app",
+    "appDisplayName": "DreamCatcher",
+    "iconFile": "resources/icon.png",
+    "wipeColor": "#607d8b",
+    "requestedPermissions": [
+      "access_activity",
+      "access_heart_rate",
+      "access_user_profile",
+	  "access_internet"
+    ],
+    "buildTargets": [
+      "higgs",
+      "meson",
+      "gemini"
+    ],
+    "i18n": {
+      "en": {
+        "name": "DreamCatcher"
+      }
+    },
+    "defaultLanguage": "en-US"
+  },
+  "devDependencies": {
+    "@fitbit/sdk": "~3.1.0",
+    "@fitbit/sdk-cli": "^1.6.0"
+  }
+}
