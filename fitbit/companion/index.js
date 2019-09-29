@@ -42,7 +42,9 @@ function average(data){
 messaging.peerSocket.onmessage = function(evt) {
   //console.log(JSON.stringify(evt.data));
   let data=evt.data;
-  //send fitbit data to streatming server. We could also send it to a local server, this is just a bit more flexible
+  fetch("http://127.0.0.1:8085/rawdata?data="+encodeURIComponent(JSON.stringify(data)));  //send fitbit raw data to local server on port 8085
+
+  //send fitbit data to streatming server.
   fetch("https://biostream-1024.appspot.com/sendps?user=fitbitstream&data="+JSON.stringify(data));  //todo: let user specify username
   
   
