@@ -28,7 +28,14 @@
         android:textSize="22sp" />
 
     <TextView
-        android:id="@+id/zSignalStatus"
+        android:id="@+id/fConnectionStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="❌ No connection to Fitbit"
+        android:textSize="22sp" />
+
+    <TextView
+        android:id="@+id/zSignalStatus2"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="❌ No EEG signal"

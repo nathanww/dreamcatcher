@@ -18,9 +18,10 @@ import java.io.InputStream;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
-
+    fitbitServer server;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -33,6 +34,16 @@ public class MainActivity extends AppCompatActivity {
                 startButton.setEnabled(false);
                 DataHandler DataHandlerTask = new DataHandler();
                 DataHandlerTask.execute();
+
+                //start the Fitbit server
+                 server = new fitbitServer();
+                try {
+                    server.start();
+                } catch(IOException ioe) {
+                    Log.w("Httpd", "The server could not start.");
+                }
+                Log.w("Httpd", "Web server initialized.");
+
             }
         });
 
@@ -44,6 +55,43 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+    }
+
+
+    //stop the server when app is closed
+    @Override
+    public void onDestroy()
+    {
+        super.onDestroy();
+        if (server != null)
+            server.stop();
+    }
+
+
+
+    //fitbitServer handles getting data from the fitbit which sends it on port 8085
+    private class fitbitServer extends NanoHTTPD {
+
+        public fitbitServer() {
+            super(8085);
+        }
+
+
+        public Response serve(String uri, Method method,
+                              Map<String, String> header,
+                              Map<String, String> parameters,
+                              Map<String, String> files) {
+            String answer = "ok"; //required because the client will get confused if there is no response
+            if (uri.indexOf("rawdata") > -1) { //recieved a data packet from the Fitbit, set the Fitbit status to good.
+
+            }
+            Log.e("server", parameters.toString());
+
+            //update the Fitbit status
+            TextView fStatus = (TextView) findViewById(R.id.fConnectionStatus);
+            fStatus.setText("✔️ Fitbit connected");
+            return new NanoHTTPD.Response(answer);
+        }
     }
 
     //DataHandler receives zMax data and writes it to a file
