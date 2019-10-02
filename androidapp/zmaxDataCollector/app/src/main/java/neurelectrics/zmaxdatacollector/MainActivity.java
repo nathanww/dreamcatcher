@@ -132,16 +132,9 @@ public class MainActivity extends AppCompatActivity {
             Log.i("Record", "Recording started");
             try {
                 //set up the data storage file
-                File outFile = new File(getApplicationContext().getExternalFilesDir(null), "zmaxdata.txt");
-                FileOutputStream outStream;
-                PrintWriter pw = new PrintWriter(outFile);
-                try {
-                    outStream = new FileOutputStream(outFile, true);
-                } catch (Exception e) {
-                    outStream = null;
+                FileWriter fileWriter = new FileWriter(getApplicationContext().getExternalFilesDir(null) + "/zmaxdata.txt", true);
+                PrintWriter pw = new PrintWriter(fileWriter);
 
-                    Log.e("DreamCatcher", "Could not create the file");
-                }
 
                 client = new Socket("127.0.0.1", 24000); // connect to the server
                 printwriter = new PrintWriter(client.getOutputStream(), true);
@@ -169,7 +162,7 @@ public class MainActivity extends AppCompatActivity {
                                         byte d2b = (byte) data2;
                                         int val = ((d1b & 0xff) << 8) | (d2b & 0xff); //combine two bytes to get an int
                                         //Log.e("EEG",""+val);
-                                        pw.write(val + ","+fitbitStatus+"\n"); //write the combined EEG and fitbit status
+                                        pw.println(System.currentTimeMillis()+","+val); //write the EEG
                                         pw.flush();
 
                                         //valid packet received, so update the connection status
@@ -184,9 +177,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                         dataBuffer = dataBuffer + (char) db;
 
-                        //  Log.e("databyte", "" + c);
-                        //outStream.write(c);
-                        //outStream.flush();
+
                     }
 
 
