@@ -24,6 +24,16 @@ import java.util.Map;
 public class MainActivity extends AppCompatActivity {
     fitbitServer server;
     String fitbitStatus="";
+
+    int getWordAt(String[] data,int position) { //get the word (two bytes) from the zMax hex data stream and combine them to make an int
+        int data1 = (int) Long.parseLong(data[position], 16); //first two digits are EEG channel 1
+        int data2 = (int) Long.parseLong(data[position+1], 16);
+        byte d1b = (byte) data1;
+        byte d2b = (byte) data2;
+        int val = ((d1b & 0xff) << 8) | (d2b & 0xff); //combine two bytes to get an int
+        return val;
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -118,7 +128,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     //DataHandler receives zMax data and writes it to a file
-    //Currently we take only the first EEG channel but this will be changed in the near future
+    //Note--data is stored in UNSCALED form
+    //THis function is based on the matlab code at http://hypnodynecorp.com/downloads/HDConnect.m
     private class DataHandler extends AsyncTask<Void, String, Void> {
         private Socket client;
         private PrintWriter printwriter;
@@ -149,20 +160,25 @@ public class MainActivity extends AppCompatActivity {
                         byte db = (byte) c;
                         //Log.e("data","data");
                         if (db == '\n') {
-
                             if (dataBuffer.length() > 1) { //we have just completed a sample, now process it
                                 String[] splitup = dataBuffer.split("\\.");
                                 if (splitup.length > 1) { //the stuff after the period is the actual data
                                     String[] theData = splitup[1].split("-"); //split into individual hex digits
                                     int packetType = (int) Long.parseLong(theData[0], 16);
                                     if (packetType >= 1 && packetType <= 11) { //first digit specifies the type of packet this is; we only process it if it's a dat apacket
-                                        int data1 = (int) Long.parseLong(theData[1], 16); //first two digits are EEG channel 1
-                                        int data2 = (int) Long.parseLong(theData[2], 16);
-                                        byte d1b = (byte) data1;
-                                        byte d2b = (byte) data2;
-                                        int val = ((d1b & 0xff) << 8) | (d2b & 0xff); //combine two bytes to get an int
+                                        int EEG_R=getWordAt(theData,1);
+                                        int EEG_L=getWordAt(theData,3);
+                                        int ACC_X=getWordAt(theData,5);
+                                        int ACC_Y=getWordAt(theData,7);
+                                        int ACC_Z=getWordAt(theData,9);
+                                        int PPG = getWordAt(theData,27);
+                                        int BODYTEMP=getWordAt(theData,36);
+                                        int AMBIENTLIGHT=getWordAt(theData,21);
+                                        int BATTERYPOWER=getWordAt(theData,23);
+                                        int AMBIENTNOISE=getWordAt(theData,19);
+
                                         //Log.e("EEG",""+val);
-                                        pw.println(System.currentTimeMillis()+","+val); //write the EEG
+                                        pw.println(System.currentTimeMillis()+","+EEG_R+","+EEG_L+","+ACC_X+","+ACC_Y+","+ACC_Z+","+PPG+","+BODYTEMP+","+AMBIENTLIGHT+","+BATTERYPOWER+","+AMBIENTNOISE); //write the EEG
                                         pw.flush();
 
                                         //valid packet received, so update the connection status
