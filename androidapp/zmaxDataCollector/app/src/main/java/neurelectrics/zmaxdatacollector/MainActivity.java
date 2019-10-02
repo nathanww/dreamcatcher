@@ -13,6 +13,7 @@ import android.widget.TextView;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
@@ -22,6 +23,7 @@ import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
     fitbitServer server;
+    String fitbitStatus="";
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -71,7 +73,7 @@ public class MainActivity extends AppCompatActivity {
 
     //fitbitServer handles getting data from the fitbit which sends it on port 8085
     private class fitbitServer extends NanoHTTPD {
-
+        PrintWriter fitbitWriter;
         public fitbitServer() {
             super(8085);
         }
@@ -84,12 +86,33 @@ public class MainActivity extends AppCompatActivity {
             String answer = "ok"; //required because the client will get confused if there is no response
             if (uri.indexOf("rawdata") > -1) { //recieved a data packet from the Fitbit, set the Fitbit status to good.
 
+                runOnUiThread(new Runnable() {
+
+                    @Override
+                    public void run() {
+                        TextView fStatus = (TextView) findViewById(R.id.fConnectionStatus);
+                        fStatus.setText("✔️ Fitbit connected");
+                    }
+                });
+
+                String[] fitbitParams=parameters.toString().replace(":",",").split(","); //split up individual data vals
+                fitbitStatus=System.currentTimeMillis()+","+fitbitParams[2]+","+fitbitParams[4]+","+fitbitParams[6]+","+fitbitParams[8]+","+fitbitParams[10]+","+fitbitParams[12]+","+fitbitParams[14]; //store just sensor data value, not keys
+                Log.i("fitbit", fitbitStatus);
+                try {
+                    FileWriter fileWriter = new FileWriter(getApplicationContext().getExternalFilesDir(null) + "/fitbitdata.txt", true);
+                    PrintWriter printWriter = new PrintWriter(fileWriter);
+                    printWriter.println(fitbitStatus);  //New line
+                    printWriter.flush();
+                    printWriter.close();
+                }
+                catch (IOException e) {
+                    Log.e("Fitbitserver","Error writing to file");
+                }
             }
-            Log.e("server", parameters.toString());
+           // Log.i("server", parameters.toString());
 
             //update the Fitbit status
-            TextView fStatus = (TextView) findViewById(R.id.fConnectionStatus);
-            fStatus.setText("✔️ Fitbit connected");
+
             return new NanoHTTPD.Response(answer);
         }
     }
@@ -146,7 +169,7 @@ public class MainActivity extends AppCompatActivity {
                                         byte d2b = (byte) data2;
                                         int val = ((d1b & 0xff) << 8) | (d2b & 0xff); //combine two bytes to get an int
                                         //Log.e("EEG",""+val);
-                                        pw.write(val + "\n");
+                                        pw.write(val + ","+fitbitStatus+"\n"); //write the combined EEG and fitbit status
                                         pw.flush();
 
                                         //valid packet received, so update the connection status
