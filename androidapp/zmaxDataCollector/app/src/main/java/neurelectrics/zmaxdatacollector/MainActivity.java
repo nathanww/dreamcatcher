@@ -11,6 +11,9 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
+import org.apache.commons.math3.stat.correlation.PearsonsCorrelation;
+import org.apache.commons.math3.stat.descriptive.moment.StandardDeviation;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
@@ -48,7 +51,7 @@ public class MainActivity extends AppCompatActivity {
                 DataHandlerTask.execute();
 
                 //start the Fitbit server
-                 server = new fitbitServer();
+                server = new fitbitServer();
                 try {
                     server.start();
                 } catch(IOException ioe) {
@@ -84,6 +87,8 @@ public class MainActivity extends AppCompatActivity {
     //fitbitServer handles getting data from the fitbit which sends it on port 8085
     private class fitbitServer extends NanoHTTPD {
         PrintWriter fitbitWriter;
+
+
         public fitbitServer() {
             super(8085);
         }
@@ -119,7 +124,7 @@ public class MainActivity extends AppCompatActivity {
                     Log.e("Fitbitserver","Error writing to file");
                 }
             }
-           // Log.i("server", parameters.toString());
+            // Log.i("server", parameters.toString());
 
             //update the Fitbit status
 
@@ -136,7 +141,43 @@ public class MainActivity extends AppCompatActivity {
         private String messsage;
         private Context mContext;
         String dataBuffer = "";
+        int BUFFER_SIZE=1500;
+        double MIN_QUAL=100;
+        double[] eegLeftBuffer=new double[BUFFER_SIZE]; //buffered EEG data for evaluating signal quality
+        double[] eegRightBuffer=new double[BUFFER_SIZE];
+        double[] stds=new double[BUFFER_SIZE];
 
+        //take standard deviation of EEG channels
+        //if a channel is disocnnected it will be flat, with little stdev
+        //todo: low pass filter before, to remove variation indcued by amplifier artifacts when a channel is disconnected
+        public double computeQuality(int EEG_L,int EEG_R) {
+            eegLeftBuffer[BUFFER_SIZE-1]=EEG_L; //update buffers w new data
+            eegRightBuffer[BUFFER_SIZE-1]=EEG_R;
+            //shift buffers
+            for (int i=0; i < BUFFER_SIZE-1; i++) {
+                eegLeftBuffer[i]=eegLeftBuffer[i+1];
+                eegRightBuffer[i]=eegRightBuffer[i+1];
+            }
+            // double corr= new PearsonsCorrelation().correlation(eegLeftBuffer, eegRightBuffer);
+            double stdleft=new StandardDeviation().evaluate(eegLeftBuffer);
+            double stdright=new StandardDeviation().evaluate(eegRightBuffer);
+            if (stdright < stdleft) {
+                stds[BUFFER_SIZE - 1] = stdright;
+            }
+            else {
+                stds[BUFFER_SIZE - 1] = stdleft;
+            }
+            //shift moving average and take mean across the time window
+            double total=0;
+            double samples=0;
+            for (int i=0; i < BUFFER_SIZE-1; i++) {
+                stds[i]=stds[i+1];
+                total=total+stds[i];
+                samples++;
+            }
+
+            return total/samples;
+        }
 
         @Override
         protected Void doInBackground(Void... params) {
@@ -176,14 +217,20 @@ public class MainActivity extends AppCompatActivity {
                                         int AMBIENTLIGHT=getWordAt(theData,21);
                                         int BATTERYPOWER=getWordAt(theData,23);
                                         int AMBIENTNOISE=getWordAt(theData,19);
-
-                                        //Log.e("EEG",""+val);
-                                        pw.println(System.currentTimeMillis()+","+EEG_R+","+EEG_L+","+ACC_X+","+ACC_Y+","+ACC_Z+","+PPG+","+BODYTEMP+","+AMBIENTLIGHT+","+BATTERYPOWER+","+AMBIENTNOISE); //write the EEG
+                                        double EEG_QUALITY=computeQuality(EEG_L,EEG_R); //EEG signal quality from standard deviation
+                                        pw.println(System.currentTimeMillis()+","+EEG_R+","+EEG_L+","+ACC_X+","+ACC_Y+","+ACC_Z+","+PPG+","+BODYTEMP+","+AMBIENTLIGHT+","+BATTERYPOWER+","+AMBIENTNOISE+","+EEG_QUALITY); //write the EEG
                                         pw.flush();
 
                                         //valid packet received, so update the connection status
                                         TextView zCon = (TextView) findViewById(R.id.zConnectionStatus);
                                         publishProgress("zmaxconnected");
+
+                                        if ( EEG_QUALITY < MIN_QUAL) { //EEG is bad if the correlation is Nan (no variation in at least one channel, implies that the channel is pegged at max or min), or if the channels are too correlated
+                                            publishProgress("zmaxbadsignal");
+                                        }
+                                        else {
+                                            publishProgress("zmaxgoodsignal");
+                                        }
                                     } else {
                                         Log.i("Error", "Wrong packet type");
                                     }
@@ -211,6 +258,14 @@ public class MainActivity extends AppCompatActivity {
             if (values[0].equals("zmaxconnected")) {
                 TextView zStatus = (TextView) findViewById(R.id.zConnectionStatus);
                 zStatus.setText("✔️ zMax connected");
+            }
+            if (values[0].equals("zmaxbadsignal")) {
+                TextView zStatus = (TextView) findViewById(R.id.zSignalStatus);
+                zStatus.setText("⚠️️ Poor forehead signal");
+            }
+            if (values[0].equals("zmaxgoodsignal")) {
+                TextView zStatus = (TextView) findViewById(R.id.zSignalStatus);
+                zStatus.setText("✔️️️ Good forehead signal");
             }
         }
     }

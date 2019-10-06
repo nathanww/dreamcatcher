@@ -35,9 +35,8 @@
         android:textSize="22sp" />
 
     <TextView
-        android:id="@+id/zSignalStatus2"
+        android:id="@+id/zSignalStatus"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="❌ No EEG signal"
         android:textSize="22sp" />
 </LinearLayout>
