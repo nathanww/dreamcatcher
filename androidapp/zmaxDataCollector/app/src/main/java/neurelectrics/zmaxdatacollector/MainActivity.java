@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.os.AsyncTask;
+import android.os.PowerManager;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -28,6 +29,14 @@ public class MainActivity extends AppCompatActivity {
     fitbitServer server;
     String fitbitStatus="";
 
+    int ZMAX_WRITE_INTERVAL=60*60; //write zmax data every minute
+    String zMaxBuffer="";
+    int zMaxCount=0;
+
+    int FITBIT_WRITE_INTERVAL=60*10; //write fitbit data every 10 minutes
+    String fitbitBuffer="";
+    int fitbitCount=0;
+
     int getWordAt(String[] data,int position) { //get the word (two bytes) from the zMax hex data stream and combine them to make an int
         int data1 = (int) Long.parseLong(data[position], 16); //first two digits are EEG channel 1
         int data2 = (int) Long.parseLong(data[position+1], 16);
@@ -41,12 +50,19 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         final Context cont = this;
+
+        //prevent the CPU from sleeping
+        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+        final PowerManager.WakeLock wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
+                "DreamCatcher::DataCollection");
+
         setContentView(R.layout.activity_main);
         final Button startButton = (Button) findViewById(R.id.startButton);
         startButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 startButton.setEnabled(false);
+                wakeLock.acquire();// get the wakelock
                 DataHandler DataHandlerTask = new DataHandler();
                 DataHandlerTask.execute();
 
@@ -66,9 +82,12 @@ public class MainActivity extends AppCompatActivity {
         stopButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                wakeLock.release();
+
                 finish();
             }
         });
+
 
     }
 
@@ -110,19 +129,23 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
 
-                String[] fitbitParams=parameters.toString().replace(":",",").split(","); //split up individual data vals
-                fitbitStatus=System.currentTimeMillis()+","+fitbitParams[2]+","+fitbitParams[4]+","+fitbitParams[6]+","+fitbitParams[8]+","+fitbitParams[10]+","+fitbitParams[12]+","+fitbitParams[14]; //store just sensor data value, not keys
-                Log.i("fitbit", fitbitStatus);
+                String[] fitbitParams = parameters.toString().replace(":", ",").split(","); //split up individual data vals
+                fitbitStatus = System.currentTimeMillis() + "," + fitbitParams[2] + "," + fitbitParams[4] + "," + fitbitParams[6] + "," + fitbitParams[8] + "," + fitbitParams[10] + "," + fitbitParams[12] + "," + fitbitParams[14]; //store just sensor data value, not keys
+                fitbitBuffer = fitbitBuffer + fitbitStatus + "\n";
+                fitbitCount++;
+                 if (fitbitCount > FITBIT_WRITE_INTERVAL)  {
                 try {
                     FileWriter fileWriter = new FileWriter(getApplicationContext().getExternalFilesDir(null) + "/fitbitdata.txt", true);
                     PrintWriter printWriter = new PrintWriter(fileWriter);
-                    printWriter.println(fitbitStatus);  //New line
+                    printWriter.print(fitbitBuffer);  //New line
                     printWriter.flush();
                     printWriter.close();
+                    fitbitCount=0;
+                    fitbitBuffer="";
+                } catch (IOException e) {
+                    Log.e("Fitbitserver", "Error writing to file");
                 }
-                catch (IOException e) {
-                    Log.e("Fitbitserver","Error writing to file");
-                }
+            }
             }
             // Log.i("server", parameters.toString());
 
@@ -183,10 +206,6 @@ public class MainActivity extends AppCompatActivity {
         protected Void doInBackground(Void... params) {
             Log.i("Record", "Recording started");
             try {
-                //set up the data storage file
-                FileWriter fileWriter = new FileWriter(getApplicationContext().getExternalFilesDir(null) + "/zmaxdata.txt", true);
-                PrintWriter pw = new PrintWriter(fileWriter);
-
 
                 client = new Socket("127.0.0.1", 24000); // connect to the server
                 printwriter = new PrintWriter(client.getOutputStream(), true);
@@ -218,8 +237,23 @@ public class MainActivity extends AppCompatActivity {
                                         int BATTERYPOWER=getWordAt(theData,23);
                                         int AMBIENTNOISE=getWordAt(theData,19);
                                         double EEG_QUALITY=computeQuality(EEG_L,EEG_R); //EEG signal quality from standard deviation
-                                        pw.println(System.currentTimeMillis()+","+EEG_R+","+EEG_L+","+ACC_X+","+ACC_Y+","+ACC_Z+","+PPG+","+BODYTEMP+","+AMBIENTLIGHT+","+BATTERYPOWER+","+AMBIENTNOISE+","+EEG_QUALITY); //write the EEG
-                                        pw.flush();
+                                        String zmaxStatus=System.currentTimeMillis()+","+EEG_R+","+EEG_L+","+ACC_X+","+ACC_Y+","+ACC_Z+","+PPG+","+BODYTEMP+","+AMBIENTLIGHT+","+BATTERYPOWER+","+AMBIENTNOISE+","+EEG_QUALITY+"\n";
+                                        zMaxBuffer=zMaxBuffer+zmaxStatus;
+                                        zMaxCount++;
+                                        if (zMaxCount > ZMAX_WRITE_INTERVAL) {
+                                            try {
+                                                FileWriter zWriter = new FileWriter(getApplicationContext().getExternalFilesDir(null) + "/zmaxdata.txt", true);
+                                                PrintWriter printWriter = new PrintWriter(zWriter);
+                                                printWriter.print(zMaxBuffer);
+                                                printWriter.flush();
+                                                printWriter.close();
+                                                zMaxCount=0;
+                                                zMaxBuffer="";
+                                            } catch (IOException e) {
+                                                Log.e("Zmaxserver", "Error writing to file");
+                                            }
+                                        }
+
 
                                         //valid packet received, so update the connection status
                                         TextView zCon = (TextView) findViewById(R.id.zConnectionStatus);
